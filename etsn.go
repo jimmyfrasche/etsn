@@ -16,7 +16,7 @@ var (
 )
 
 func addrfix(laddr string) string {
-	if len(laddr) > 0 && laddr[len(laddr)-1] == ":" {
+	if len(laddr) > 0 && laddr[len(laddr)-1] == ':' {
 		laddr += "5908"
 	}
 	return laddr
@@ -25,6 +25,7 @@ func addrfix(laddr string) string {
 //Dial connects to the specified ETSN server and requests protocol proto.
 //
 //nett must be one of "tcp", "tcp4", "tcp6".
+//
 //laddr is standard Go networking address as used in the
 //net package. If the laddr string ends in ":", the default
 //port, 5908, is appended.
@@ -53,11 +54,9 @@ func Dial(nett, laddr, proto string) (*net.TCPConn, error) {
 
 //Server encapsulates the state of an ETSN server.
 type Server struct {
-	protos  map[string]func(*net.TCPConn)
-	lock    sync.Mutex
-	running bool
-	done    chan bool
-	log     func(error)
+	protos map[string]func(*net.TCPConn)
+	lock   sync.Mutex
+	log    func(error)
 }
 
 //New returns a new Server.
@@ -70,8 +69,8 @@ func New(logger func(error)) *Server {
 		logger = func(error) {}
 	}
 	return &Server{
-		done:   make(chan bool),
 		protos: map[string]func(*net.TCPConn){},
+		log:    logger,
 	}
 }
 
@@ -101,15 +100,27 @@ func (s *Server) Unregister(proto string) {
 	delete(s.protos, proto)
 }
 
-//Kill makes the server die. It will accept no more incoming requests.
-//Open connections will continue to run.
-func (s *Server) Kill() {
+//Help is a local version of the TCPMUX HELP protocol.
+//It returns a list of all the protocols the server
+//implements. It is not exposed by the server, but can be
+//made to do so trivially, if desired: (error handling elided
+//for brevity)
+//	server.Register("HELP", func(c *net.TCPConn) {
+//		w := bufio.NewWriter(c)
+//		for _, p := range server.Help() {
+//			w.WriteString(p)
+//			w.WriteByte('\n')
+//		}
+//		w.Flush()
+//		c.Close()
+//	})
+func (s *Server) Help() (protos []string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if s.running {
-		done <- true
-		s.running = false
+	for p := range s.protos {
+		protos = append(protos, p)
 	}
+	return
 }
 
 //Listen starts an ETSN server on port 5908.
@@ -120,9 +131,11 @@ func (s *Server) Kill() {
 //request is dropped.
 //
 //If a logger was set with SetListenLogger, all errors
-//during the ETSN handshake will be passed to it.
+//during the ETSN handshake will be passed to it, there will
+//be at most one error per goroutine.
 //
 //nett must be one of "tcp", "tcp4", "tcp6".
+//
 //laddr is standard Go networking address as used in the
 //net package. If the laddr string ends in ":", the default
 //port, 5908, is appended.
@@ -131,23 +144,12 @@ func (s *Server) Kill() {
 //the current goroutine until it is killed from another
 //goroutine.
 func (s *Server) Listen(nett, laddr string) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	if s.running {
-		return errors.New("Already running")
-	}
 	Ln, err := net.Listen(nett, addrfix(laddr))
 	if err != nil {
 		return err
 	}
-	s.running = true
 	ln := Ln.(*net.TCPListener)
 	for {
-		select {
-		case <-done:
-			return
-		default:
-		}
 		conn, err := ln.AcceptTCP()
 		if err != nil {
 			//we assume that any error here means we don't care
