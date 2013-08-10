@@ -153,6 +153,7 @@ func (s *Server) Listen(nett, laddr string) error {
 	for {
 		conn, err := ln.AcceptTCP()
 		if err != nil {
+			s.log(err)
 			//we assume that any error here means we don't care
 			continue
 		}
