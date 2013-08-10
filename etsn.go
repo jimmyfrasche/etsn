@@ -160,7 +160,7 @@ func (s *Server) Listen(nett, laddr string) error {
 		go func() {
 			conn.SetReadDeadline(time.Now().Add(time.Second))
 
-			header := make([]byte, 0, 2)
+			header := make([]byte, 2)
 			n, err := conn.Read(header)
 			if err != nil || n != 2 || header[0] != 1 {
 				conn.Close()
@@ -172,9 +172,10 @@ func (s *Server) Listen(nett, laddr string) error {
 				case header[0] != 1:
 					s.log(ErrUnsupportedProtocolVersion)
 				}
+				return
 			}
 			length := int(header[1])
-			proto := make([]byte, 0, length)
+			proto := make([]byte, length)
 			n, err = conn.Read(proto)
 			if err != nil || n != length {
 				conn.Close()
