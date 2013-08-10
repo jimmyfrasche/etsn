@@ -41,13 +41,14 @@ func Dial(nett, laddr, proto string) (*net.TCPConn, error) {
 		return nil, err
 	}
 	n, err := conn.Write(append([]byte{1, byte(len(proto))}, proto...))
-	if err != nil {
+	if err != nil || n != len(proto)+2 {
 		conn.Close()
-		return nil, err
-	}
-	if n != len(proto)+2 {
-		conn.Close()
-		return nil, io.ErrShortWrite
+		switch {
+		case err != nil:
+			return nil, err
+		case n != len(proto)+2:
+			return nil, io.ErrShortWrite
+		}
 	}
 	return conn.(*net.TCPConn), nil
 }
