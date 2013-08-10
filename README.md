@@ -5,7 +5,7 @@ Install:
 go get github.com/JImmyFrasche/etsn
 ```
 
-Documentation: http://godoc.org/JImmyFrasche/etsn
+Documentation: http://godoc.org/github.com/JImmyFrasche/etsn
 
 Example server:
 ```
