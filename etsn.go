@@ -64,7 +64,8 @@ type Server struct {
 //New returns a new Server.
 //
 //logger is called whenever there's an error establishing
-//a connection within Listen. If nil, a no op logger is used.
+//a connection within Listen. Note that the error may be nil.
+//If logger is nil, a no op logger is used.
 //The logger may be called by multiple goroutines.
 //Errors returned from handlers are passed to logger.
 func New(logger func(error)) *Server {
@@ -153,10 +154,6 @@ func (s *Server) Help() (protos []string) {
 //laddr is standard Go networking address as used in the
 //net package. If the laddr string ends in ":", the default
 //port, 5908, is appended.
-//
-//If the server does not fail to start, it will take over
-//the current goroutine until it is killed from another
-//goroutine.
 func (s *Server) Listen(nett, laddr string) error {
 	Ln, err := net.Listen(nett, addrfix(laddr))
 	if err != nil {

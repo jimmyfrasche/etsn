@@ -1,0 +1,6 @@
+#!/bin/bash
+mango >etsnsrv.1
+(echo "\`\`\`
+"; (<etsnsrv.1 nroff -man | 9 nobs) ; echo "
+\`\`\`
+") >README.md

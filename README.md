@@ -20,7 +20,9 @@ import (
 
 func main() {
 	s := etsn.New(func(e error) {
-		log.Println(e)
+		if e != nil {
+			log.Println(e)
+		}
 	})
 	s.Register("echo", func(c *net.TCPConn) {
 		log.Println(io.Copy(c, c))
