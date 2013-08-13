@@ -55,9 +55,10 @@ func Dial(nett, laddr, proto string) (*net.TCPConn, error) {
 
 //Server encapsulates the state of an ETSN server.
 type Server struct {
-	protos map[string]func(*net.TCPConn)
-	lock   sync.Mutex
-	log    func(error)
+	protos  map[string]func(*net.TCPConn) error
+	lock    sync.Mutex
+	log     func(error)
+	missing func(string, *net.TCPConn) error
 }
 
 //New returns a new Server.
@@ -65,6 +66,7 @@ type Server struct {
 //logger is called whenever there's an error establishing
 //a connection within Listen. If nil, a no op logger is used.
 //The logger may be called by multiple goroutines.
+//Errors returned from handlers are passed to logger.
 func New(logger func(error)) *Server {
 	if logger == nil {
 		logger = func(error) {}
@@ -75,13 +77,24 @@ func New(logger func(error)) *Server {
 	}
 }
 
+//ProtocolMissing is called when no protocol is found.
+//The first argument is the name of the unknown protocol, otherwise
+//it behaves exactly like a regular handler.
+//If no ProtocolMissing handler is set, or this is called with nil,
+//requests will be closed and ignored.
+func (s *Server) ProtocolMissing(pm func(string, *net.TCPConn) error) {
+	lock.Lock()
+	defer lock.Unlock()
+	s.missing = pm
+}
+
 //Register registers a handler function for the protocol named proto.
 //
 //If there was already a protocol registered with identifier proto,
 //handler will be used for any future connections. All existing
 //connections of proto will remain with the previous handler until
 //the connections are closed.
-func (s *Server) Register(proto string, handler func(*net.TCPConn)) error {
+func (s *Server) Register(proto string, handler func(*net.TCPConn) error) error {
 	if len(proto) > 255 {
 		return ErrProtocolIdentifierTooLong
 	}
@@ -187,17 +200,21 @@ func (s *Server) Listen(nett, laddr string) error {
 				}
 				return
 			}
+			conn.SetReadDeadline(time.Time{})
+			sproto := string(proto)
 
 			s.lock.Lock()
-			handler, ok := s.protos[string(proto)]
+			handler, ok := s.protos[sproto]
+			missing := s.missing
 			s.lock.Unlock()
+
 			if !ok {
 				conn.Close()
-				return
+			} else if missing != nil {
+				s.log(missing(proto, conn))
+			} else {
+				s.log(handler(conn))
 			}
-
-			conn.SetReadDeadline(time.Time{})
-			handler(conn)
 		}()
 	}
 }
