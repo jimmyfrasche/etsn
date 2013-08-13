@@ -72,7 +72,7 @@ func New(logger func(error)) *Server {
 		logger = func(error) {}
 	}
 	return &Server{
-		protos: map[string]func(*net.TCPConn){},
+		protos: map[string]func(*net.TCPConn) error{},
 		log:    logger,
 	}
 }
@@ -83,8 +83,8 @@ func New(logger func(error)) *Server {
 //If no ProtocolMissing handler is set, or this is called with nil,
 //requests will be closed and ignored.
 func (s *Server) ProtocolMissing(pm func(string, *net.TCPConn) error) {
-	lock.Lock()
-	defer lock.Unlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	s.missing = pm
 }
 
@@ -211,7 +211,7 @@ func (s *Server) Listen(nett, laddr string) error {
 			if !ok {
 				conn.Close()
 			} else if missing != nil {
-				s.log(missing(proto, conn))
+				s.log(missing(sproto, conn))
 			} else {
 				s.log(handler(conn))
 			}
