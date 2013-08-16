@@ -47,7 +47,10 @@ func (s *Server) Listen(proto string, handler func(*net.TCPConn) error) error {
 	}
 	nm := filepath.Join(s.dir, proto)
 	if err := os.Remove(nm); err != nil {
-		return err
+		pe := err.(*os.PathError)
+		if pe.Err.Error() != "no such file or directory" {
+			return err
+		}
 	}
 	c, err := net.Dial("unix", nm)
 	if err != nil {
