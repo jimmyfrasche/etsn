@@ -45,6 +45,7 @@ func (s *Server) Listen(proto string, handler func(*net.TCPConn) error) error {
 	if len(proto) > 255 {
 		return etsn.ErrProtocolIdentifierTooLong
 	}
+
 	nm := filepath.Join(s.dir, proto)
 	if err := os.Remove(nm); err != nil {
 		pe := err.(*os.PathError)
@@ -52,17 +53,25 @@ func (s *Server) Listen(proto string, handler func(*net.TCPConn) error) error {
 			return err
 		}
 	}
-	c, err := net.Dial("unix", nm)
+
+	c, err := net.Listen("unix", nm)
 	if err != nil {
 		return err
 	}
-	conn := c.(*net.UnixConn)
+	ul := c.(*net.UnixListener)
+
 	for {
-		fs, err := fd.Get(conn, 1, nil)
+		conn, err := ul.AcceptUnix()
 		if err != nil {
 			//BUG(jmf) There are surely many an error that should lead to
 			//us breaking out of the listen loop. For example if another
 			//process deletes our socket
+			s.log(err)
+			continue
+		}
+
+		fs, err := fd.Get(conn, 1, nil)
+		if err != nil {
 			s.log(err)
 			continue
 		}
@@ -84,8 +93,6 @@ func (s *Server) Listen(proto string, handler func(*net.TCPConn) error) error {
 			ic.Close()
 			continue
 		}
-		go func() {
-			s.log(handler(tcp))
-		}()
+		go s.log(handler(tcp))
 	}
 }
